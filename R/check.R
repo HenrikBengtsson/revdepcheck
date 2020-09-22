@@ -1,3 +1,17 @@
+revdep_check_args <- function() {
+  default <- c("--no-manual", "--no-build-vignettes")
+  args <- getOption("revdepcheck.check_args")
+  if (is.null(args)) {
+    args <- Sys.getenv("R_REVDEPCHECK_CHECK_ARGS")
+    if (!nzchar(args)) {
+      args <- default
+    } else {
+      args <- unlist(strsplit(args, split = " ", fixed = TRUE))
+    }
+  }
+  args
+}
+
 
 #' @importFrom rcmdcheck rcmdcheck_process
 
@@ -29,7 +43,7 @@ check_proc <- function(pkgdir, pkgname, version = c("old", "new"),
     rcmdcheck_process$new(
       path = tarball,
       libpath = lib,
-      args = c("--no-manual", "--no-build-vignettes", "-o", out)
+      args = c(revdep_check_args(), "-o", out)
     )
   )
 }
