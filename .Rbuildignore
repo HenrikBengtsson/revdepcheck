@@ -7,3 +7,9 @@
 ^revdep$
 ^\.travis\.yml$
 ^\.httr-oauth$
+^codecov\.yml$
+^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^LICENSE\.md$
