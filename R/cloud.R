@@ -101,7 +101,7 @@ calc_eta <- function(creation_time, current_time, running, completed, total) {
 #' @family cloud
 #' @inheritParams cloud_report
 #' @export
-cloud_fetch_results <- function(job_id = cloud_job(), pkg = ".") {
+cloud_fetch_results <- function(job_id = cloud_job(pkg = pkg), pkg = ".") {
   pkg <- pkg_check(pkg)
   cloud <- dir_find(pkg, "cloud")
 
@@ -133,13 +133,14 @@ cloud_fetch_results <- function(job_id = cloud_job(), pkg = ".") {
 #'   automatically built for the package at `pkg` by [pkgbuild::build()].
 #' @param revdep_packages A character vector of packages to check, if `NULL`
 #'   equal to [cran_revdeps()]
+#' @param r_version The R version to use.
 #' @returns The AWS Batch job-id
 #' @inheritParams revdep_check
 #' @importFrom cli cli_alert_info cli_alert_success cli_alert_danger
 #' @importFrom httr GET PATCH POST stop_for_status add_headers content
 #' @family cloud
 #' @export
-cloud_check <- function(pkg = ".", tarball = NULL, revdep_packages = NULL) {
+cloud_check <- function(pkg = ".", tarball = NULL, revdep_packages = NULL, r_version = "4.0.3") {
   if (is.null(tarball)) {
     pkg <- pkg_check(pkg)
     tarball <- pkgbuild::build(path = pkg)
@@ -159,7 +160,8 @@ cloud_check <- function(pkg = ".", tarball = NULL, revdep_packages = NULL) {
     body = list(
       package_name = package_name,
       package_version = package_version,
-      revdep_packages = revdep_packages
+      revdep_packages = revdep_packages,
+      r_version = r_version
     ),
     encode = "json"
   )
@@ -197,7 +199,10 @@ cloud_check <- function(pkg = ".", tarball = NULL, revdep_packages = NULL) {
 
   cli_alert("Run {.fun cloud_status} to monitor job status")
 
-  cloud_job(job_id)
+  cloud_job(job_id = job_id)
+  cloud <- dir_find(pkg, "cloud")
+  out_dir <- file.path(cloud, job_id)
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
   invisible(job_id)
 }
@@ -333,7 +338,7 @@ cloud_compare <- function(pkg) {
   new <- file.path(pkg, "new", paste0(basename(pkg), ".Rcheck"), "00check.log")
 
   dependency_path <- file.path(pkg, "dependency_install.log")
-  dependency_error <- any(grep("ERROR: .*is not available for package", readLines(dependency_path))) || !(file.exists(old) && file.exists(new))
+  dependency_error <- any(grep("ERROR: .*is not available for package", readLines(dependency_path, warn = FALSE))) || !(file.exists(old) && file.exists(new))
   old <- cloud_check_result(old, description, dependency_error)
   new <- cloud_check_result(new, description, dependency_error)
   if (isTRUE(dependency_error)) {
@@ -350,7 +355,7 @@ cloud_compare <- function(pkg) {
 #' @inheritParams cloud_report
 #' @family cloud
 #' @export
-cloud_summary <- function(job_id = cloud_job(), pkg = ".") {
+cloud_summary <- function(job_id = cloud_job(pkg = pkg), pkg = ".") {
   results <- cloud_results(job_id = job_id, pkg = pkg)
   structure(
     results,
@@ -364,7 +369,7 @@ cloud_summary <- function(job_id = cloud_job(), pkg = ".") {
 #' @inheritParams cloud_report
 #' @family cloud
 #' @export
-cloud_details <- function(job_id = cloud_job(), revdep, pkg = ".") {
+cloud_details <- function(job_id = cloud_job(pkg = pkg), revdep, pkg = ".") {
   pkg <- pkg_check(pkg)
   cloud <- dir_find(pkg, "cloud")
 
@@ -384,7 +389,7 @@ cloud_details <- function(job_id = cloud_job(), revdep, pkg = ".") {
 #' @inheritParams revdep_report
 #' @family cloud
 #' @export
-cloud_report <- function(job_id = cloud_job(), pkg = ".", file = "", all = FALSE, results = NULL, failures = TRUE) {
+cloud_report <- function(job_id = cloud_job(pkg = pkg), pkg = ".", file = "", all = FALSE, results = NULL, failures = TRUE) {
   pkg <- pkg_check(pkg)
   root <- dir_find(pkg, "root")
 
@@ -415,7 +420,7 @@ cloud_report <- function(job_id = cloud_job(), pkg = ".", file = "", all = FALSE
 
 #' @rdname cloud_report
 #' @export
-cloud_report_summary <- function(job_id = cloud_job(), file = "", all = FALSE, pkg = ".", results = NULL) {
+cloud_report_summary <- function(job_id = cloud_job(pkg = pkg), file = "", all = FALSE, pkg = ".", results = NULL) {
   if (is.null(results)) {
     results <- cloud_results(job_id, pkg)
   }
@@ -449,7 +454,7 @@ cloud_report_summary <- function(job_id = cloud_job(), file = "", all = FALSE, p
 
 #' @rdname cloud_report
 #' @export
-cloud_report_problems <- function(job_id = cloud_job(), pkg = ".", file = "", all = FALSE, results = NULL) {
+cloud_report_problems <- function(job_id = cloud_job(pkg = pkg), pkg = ".", file = "", all = FALSE, results = NULL) {
   if (is.null(results)) {
     results <- cloud_results(job_id, pkg)
   }
@@ -458,7 +463,7 @@ cloud_report_problems <- function(job_id = cloud_job(), pkg = ".", file = "", al
 
 #' @rdname cloud_report
 #' @export
-cloud_report_failures <- function(job_id = cloud_job(), pkg = ".", file = "", results = NULL) {
+cloud_report_failures <- function(job_id = cloud_job(pkg = pkg), pkg = ".", file = "", results = NULL) {
   if (is.null(results)) {
     results <- cloud_results(job_id, pkg)
   }
@@ -467,7 +472,7 @@ cloud_report_failures <- function(job_id = cloud_job(), pkg = ".", file = "", re
 
 #' @rdname cloud_report
 #' @export
-cloud_report_cran <- function(job_id = cloud_job(), pkg = ".", results = NULL) {
+cloud_report_cran <- function(job_id = cloud_job(pkg = pkg), pkg = ".", results = NULL) {
   if (is.null(results)) {
     results <- cloud_results(job_id, pkg)
   }
@@ -481,7 +486,7 @@ cloud_report_cran <- function(job_id = cloud_job(), pkg = ".", results = NULL) {
 #' @family cloud
 #' @keywords internal
 #' @export
-cloud_results <- function(job_id = cloud_job(), pkg = ".") {
+cloud_results <- function(job_id = cloud_job(pkg = pkg), pkg = ".") {
   pkg <- pkg_check(pkg)
   cloud <- dir_find(pkg, "cloud")
 
@@ -502,7 +507,7 @@ cloud_results <- function(job_id = cloud_job(), pkg = ".") {
 #' @inheritParams cloud_report
 #' @inherit revdep_email
 #' @export
-cloud_email <- function(type = c("broken", "failed"), job_id = cloud_job(), pkg = ".", packages = NULL, draft = FALSE) {
+cloud_email <- function(type = c("broken", "failed"), job_id = cloud_job(pkg = pkg), pkg = ".", packages = NULL, draft = FALSE) {
   type <- match.arg(type)
 
   package_results <- cloud_results(job_id, pkg)
@@ -525,18 +530,34 @@ cloud_email <- function(type = c("broken", "failed"), job_id = cloud_job(), pkg 
 
 #' Return the current cloud job
 #'
-#' This is automatically set by [cloud_check()] and only lasts for the current R session.
+#' The `job_id` is automatically set by [cloud_check()] and is remembered for
+#' the duration of the current R session. If there is no active `job_id`, but
+#' there are local cloud check results, `job_id` is inferred from the most
+#' recently modified cloud check results.
+#'
 #' @param job_id If not `NULL`, sets the active `job_id` to the input.
+#' @inheritParams cloud_report
 #' @export
-cloud_job <- function(job_id = NULL) {
-  if (!is.null(job_id)) {
-    cloud_data$job_id <- job_id
+cloud_job <- function(job_id = NULL, pkg = ".") {
+  cloud_data$job_id <- job_id %||% cloud_data$job_id
+  if (!is.null(cloud_data$job_id)) {
+    return(invisible(cloud_data$job_id))
   }
 
-  if (is.null(cloud_data$job_id)) {
-    stop("No current job, please specify the `job_id` explicitly, or run a job with `cloud_check()`", call. = FALSE)
+  pkg <- pkg_check(pkg)
+  cloud <- dir_find(pkg, "cloud")
+  if (dir.exists(cloud)) {
+    cloud_dirs <- list.dirs(cloud, recursive = FALSE)
+  } else {
+    cloud_dirs <- character()
+  }
+  if (length(cloud_dirs) < 1) {
+    stop("Can't find any previous `cloud_check()` results locally, can't discover `job_id`", call. = FALSE)
   }
 
+  latest <- cloud_dirs[which.max(file.info(cloud_dirs)$mtime)]
+  cloud_data$job_id <- basename(latest)
+  cli_alert_success("Most recent cloud job {.arg job_id}: {.val {cloud_data$job_id}}")
   invisible(cloud_data$job_id)
 }
 
@@ -664,7 +685,7 @@ cloud_job_mapping <- function(job_id = cloud_job()) {
 #' @family cloud
 #' @returns A character vector with the names of broken packages, to be passed to `cloud_check()`.
 #' @export
-cloud_broken <- function(job_id = cloud_job(), pkg = ".", install_failures = FALSE, timeout_failures = FALSE) {
+cloud_broken <- function(job_id = cloud_job(pkg = pkg), pkg = ".", install_failures = FALSE, timeout_failures = FALSE) {
   results <- cloud_results(job_id = job_id, pkg = pkg)
   broken <- map_lgl(results, is_broken, install_failures, timeout_failures)
 
@@ -673,7 +694,7 @@ cloud_broken <- function(job_id = cloud_job(), pkg = ".", install_failures = FAL
 
 #' @rdname cloud_broken
 #' @export
-cloud_failed <- function(job_id = cloud_job(), pkg = ".") {
+cloud_failed <- function(job_id = cloud_job(pkg = pkg), pkg = ".") {
   failed_indexes <- cloud_job_list(job_id, status = "FAILED")$jobSummaryList$arrayProperties$index
   mapping <- cloud_job_mapping(job_id)
 
