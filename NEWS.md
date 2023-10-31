@@ -1,4 +1,16 @@
-# 1.0.0.9000
+# revdepcheck (development version)
+
+* `cloud_check(r_version = "4.3.1")` is the updated default (#361).
+
+* `cloud_check()` gains the ability to check Bioconductor packages via a new
+  `bioc` argument, with default `TRUE` (#362)
+
+* updated pkgdown template and url to https://revdepcheck.r-lib.org.
+
+* `cloud_check()` gains the ability to add additional packages as the source
+  of reverse dependencies.
+
+* `cran_revdeps()` now accepts multiple packge names.
 
 * `cloud_results()` gains a progress bar so you can see what's happening
   for large revdep runs (#273)
@@ -13,6 +25,6 @@
   and problems.md.
 
 
-# 1.0.0
+# revdepcheck 1.0.0
 
 First public release.
