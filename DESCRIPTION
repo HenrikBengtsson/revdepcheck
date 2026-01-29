@@ -25,7 +25,7 @@ Imports:
     DBI,
     desc (>= 1.3.0),
     glue,
-    gmailr,
+    gmailr (>= 1.0.0),
     hms,
     httr,
     jsonlite,
