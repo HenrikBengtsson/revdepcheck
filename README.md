@@ -1,14 +1,3 @@
-# revdepcheck
-
-> Automated, Isolated, Reverse Dependency Checking
-
-<!-- badges: start -->
-[![R-CMD-check](https://github.com/r-lib/revdepcheck/workflows/R-CMD-check/badge.svg)](https://github.com/r-lib/revdepcheck/actions)
-[![Codecov test coverage](https://codecov.io/gh/r-lib/revdepcheck/branch/main/graph/badge.svg)](https://codecov.io/gh/r-lib/revdepcheck?branch=main)
-[![](http://www.r-pkg.org/badges/version/revdepcheck)](http://www.r-pkg.org/pkg/revdepcheck)
-[![CRAN RStudio mirror downloads](http://cranlogs.r-pkg.org/badges/revdepcheck)](http://www.r-pkg.org/pkg/revdepcheck)
-<!-- badges: end -->
-
 ## Features
 
 * To avoid false positives due to existing failures, revdepcheck runs 
@@ -27,10 +16,8 @@
 
 ## Installation
 
-This package is not available on CRAN yet. Install it with:
-
 ```r
-devtools::install_github('r-lib/revdepcheck')
+pak::pkg_install("r-lib/revdepcheck")
 ```
 
 ## Usage

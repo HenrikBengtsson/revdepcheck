@@ -7,6 +7,8 @@
 #' then reports the differences so you can see what checks were previously
 #' ok but now fail.
 #'
+#' It requires to use a repos option that provides the source code of the packages not binaries.
+#'
 #' Once your package has been successfully submitted to CRAN, you should
 #' run `revdep_reset()`. This deletes all files used for checking, freeing
 #' up disk space and leaving you in a clean state for the next release.
@@ -40,6 +42,8 @@
 #'   complete. Default is 10 minutes.
 #' @param num_workers Number of parallel workers to use
 #' @param bioc Also check revdeps that live in Bioconductor?
+#' @param cran Should cran mirror be attached to getOpion("repos") if it
+#' is not already present.
 #' @param env Environment variables to set for the install and check
 #'   processes. See [revdep_env_vars()].
 #'
@@ -51,15 +55,16 @@
 #' @importFrom withr with_libpaths with_envvar
 #' @importFrom crancache install_packages
 
-revdep_check <- function(pkg = ".",
-                         dependencies = c("Depends", "Imports",
-                                          "Suggests", "LinkingTo"),
-                         quiet = TRUE,
-                         timeout = as.difftime(10, units = "mins"),
-                         num_workers = 1,
-                         bioc = TRUE,
-                         env = revdep_env_vars()) {
-
+revdep_check <- function(
+  pkg = ".",
+  dependencies = c("Depends", "Imports", "Suggests", "LinkingTo"),
+  quiet = TRUE,
+  timeout = as.difftime(10, units = "mins"),
+  num_workers = 1,
+  bioc = TRUE,
+  cran = TRUE,
+  env = revdep_env_vars()
+) {
   pkg <- pkg_check(pkg)
   dir_setup(pkg)
   if (!db_exists(pkg)) {
@@ -69,13 +74,32 @@ revdep_check <- function(pkg = ".",
   did_something <- FALSE
   repeat {
     stage <- db_metadata_get(pkg, "todo") %|0|% "init"
-    switch(stage,
-      init =    revdep_init(pkg, dependencies = dependencies, bioc = bioc),
-      install = revdep_install(pkg, quiet = quiet, env = env),
-      run =     revdep_run(pkg, quiet = quiet, timeout = timeout,
-                           num_workers = num_workers, env = env),
-      report =  revdep_final_report(pkg),
-      done =    break
+    switch(
+      stage,
+      init = revdep_init(
+        pkg,
+        dependencies = dependencies,
+        bioc = bioc,
+        cran = cran
+      ),
+      install = revdep_install(
+        pkg,
+        quiet = quiet,
+        env = env,
+        bioc = bioc,
+        cran = cran
+      ),
+      run = revdep_run(
+        pkg,
+        quiet = quiet,
+        timeout = timeout,
+        num_workers = num_workers,
+        env = env,
+        bioc = bioc,
+        cran = cran
+      ),
+      report = revdep_final_report(pkg, bioc = bioc, cran = cran),
+      done = break
     )
     did_something <- TRUE
   }
@@ -100,18 +124,19 @@ revdep_setup <- function(pkg = ".") {
 }
 
 
-revdep_init <- function(pkg = ".",
-                         dependencies = c("Depends", "Imports",
-                                          "Suggests", "LinkingTo"),
-                         bioc = TRUE) {
-
+revdep_init <- function(
+  pkg = ".",
+  dependencies = c("Depends", "Imports", "Suggests", "LinkingTo"),
+  bioc = TRUE,
+  cran = TRUE
+) {
   pkg <- pkg_check(pkg)
   pkgname <- pkg_name(pkg)
-  db_clean(pkg)              # Delete all records
+  db_clean(pkg) # Delete all records
 
   "!DEBUG getting reverse dependencies for `basename(pkg)`"
   status("INIT", "Computing revdeps")
-  revdeps <- cran_revdeps(pkgname, dependencies, bioc = bioc)
+  revdeps <- cran_revdeps(pkgname, dependencies, bioc = bioc, cran = cran)
   db_todo_add(pkg, revdeps)
 
   db_metadata_set(pkg, "todo", "install")
@@ -121,7 +146,13 @@ revdep_init <- function(pkg = ".",
   invisible()
 }
 
-revdep_install <- function(pkg = ".", quiet = FALSE, env = character()) {
+revdep_install <- function(
+  pkg = ".",
+  quiet = FALSE,
+  env = character(),
+  bioc = bioc,
+  cran = TRUE
+) {
   pkg <- pkg_check(pkg)
   pkgname <- pkg_name(pkg)
 
@@ -139,7 +170,8 @@ revdep_install <- function(pkg = ".", quiet = FALSE, env = character()) {
 
   # we don't want to fail on aarch64 because there are no binary bioc
   # packages for that
-  fail_on_warn <- Sys.info()[["sysname"]] != "Darwin" || R.Version()$arch != "aarch64"
+  fail_on_warn <- Sys.info()[["sysname"]] != "Darwin" ||
+    R.Version()$arch != "aarch64"
 
   with_envvar(
     c(CRANCACHE_REPOS = "cran,bioc", CRANCACHE_QUIET = "yes", env),
@@ -147,7 +179,12 @@ revdep_install <- function(pkg = ".", quiet = FALSE, env = character()) {
       dir_find(pkg, "old"),
       rlang::with_options(
         warn = if (fail_on_warn) 2 else 1,
-        install_packages(pkgname, quiet = quiet, repos = get_repos(bioc = TRUE), upgrade = "always")
+        install_packages(
+          pkgname,
+          quiet = quiet,
+          repos = get_repos(bioc = bioc, cran = cran),
+          upgrade = "always"
+        )
       )
     )
   )
@@ -161,15 +198,25 @@ revdep_install <- function(pkg = ".", quiet = FALSE, env = character()) {
       dir_find(pkg, "new"),
       rlang::with_options(
         warn = if (fail_on_warn) 2 else 1,
-        install_local(pkg, quiet = quiet, repos = get_repos(bioc = TRUE), force = TRUE, upgrade = "always")
+        install_local(
+          pkg,
+          quiet = quiet,
+          repos = get_repos(bioc = bioc, cran = cran),
+          force = TRUE,
+          upgrade = "always"
+        )
       )
     )
   )
 
   # Record libraries
   lib <- library_compare(pkg)
-  utils::write.csv(lib, file.path(dir_find(pkg, "checks"), "libraries.csv"),
-    row.names = FALSE, quote = FALSE)
+  utils::write.csv(
+    lib,
+    file.path(dir_find(pkg, "checks"), "libraries.csv"),
+    row.names = FALSE,
+    quote = FALSE
+  )
 
   db_metadata_set(pkg, "todo", "run")
   invisible()
@@ -177,10 +224,15 @@ revdep_install <- function(pkg = ".", quiet = FALSE, env = character()) {
 
 #' @importFrom prettyunits vague_dt
 
-revdep_run <- function(pkg = ".", quiet = TRUE,
-                       timeout = as.difftime(10, units = "mins"),
-                       num_workers = 1, bioc = TRUE, env = character()) {
-
+revdep_run <- function(
+  pkg = ".",
+  quiet = TRUE,
+  timeout = as.difftime(10, units = "mins"),
+  num_workers = 1,
+  bioc = TRUE,
+  env = character(),
+  cran = TRUE
+) {
   pkg <- pkg_check(pkg)
   pkgname <- pkg_name(pkg)
 
@@ -199,11 +251,15 @@ revdep_run <- function(pkg = ".", quiet = TRUE,
       quiet = quiet,
       timeout = timeout,
       num_workers = num_workers,
-      env = env),
+      env = env,
+      bioc = bioc,
+      cran = cran
+    ),
     packages = data.frame(
       package = todo,
       state = if (length(todo)) "todo" else character(),
-      stringsAsFactors = FALSE)
+      stringsAsFactors = FALSE
+    )
   )
 
   run_event_loop(state)
@@ -218,15 +274,16 @@ revdep_run <- function(pkg = ".", quiet = TRUE,
   invisible()
 }
 
-revdep_final_report <- function(pkg = ".") {
+revdep_final_report <- function(pkg = ".", bioc = TRUE, cran = TRUE) {
   db_metadata_set(pkg, "todo", "done")
   status("REPORT")
-  revdep_report(pkg)
+  revdep_report(pkg, bioc = bioc, cran = cran)
 }
 
 report_exists <- function(pkg) {
   root <- dir_find(pkg, "root")
-  file.exists(file.path(root, "README.md")) && file.exists(file.path(root, "problems.md"))
+  file.exists(file.path(root, "README.md")) &&
+    file.exists(file.path(root, "problems.md"))
 }
 
 #' @export

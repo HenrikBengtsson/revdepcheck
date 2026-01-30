@@ -9,9 +9,9 @@ cloud_check(
   tarball = NULL,
   revdep_packages = NULL,
   extra_revdeps = NULL,
-  r_version = "4.3.1",
+  r_version = "4.5.1",
   check_args = "--no-manual",
-  bioc = TRUE
+  bioc = FALSE
 )
 }
 \arguments{
@@ -30,7 +30,7 @@ dependencies.}
 
 \item{check_args}{Additional argument to pass to \verb{R CMD check}}
 
-\item{bioc}{Also check revdeps that live in Bioconductor? Default \code{TRUE}.
+\item{bioc}{Also check revdeps that live in Bioconductor? Default \code{FALSE}.
 Note that the cloud revdep check service does not currently include system
 dependencies of Bioconductor packages, so there is potential for more
 failed checks.}
@@ -44,6 +44,7 @@ Submit a reverse dependency checking job to the cloud
 \seealso{
 Other cloud: 
 \code{\link{cloud_broken}()},
+\code{\link{cloud_browse}()},
 \code{\link{cloud_cancel}()},
 \code{\link{cloud_details}()},
 \code{\link{cloud_fetch_results}()},
